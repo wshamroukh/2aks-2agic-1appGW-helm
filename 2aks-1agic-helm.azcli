@@ -218,7 +218,7 @@ appgw_pubip=$(az network public-ip show -g $rg -n $appgw_name-pubip --query ipAd
 
 
 #############################
-# App 1  deployed to aks1 #
+# App 1  deployed to aks1   #
 #############################
 az aks get-credentials -g $rg -n $aks1_name
 
@@ -268,7 +268,7 @@ metadata:
     kubernetes.io/ingress.class: azure/application-gateway
 spec:
   rules:
-  - host: "nginx.waddah.net"
+  - host: "nginx.$(appgw_pubip).nip.ip"
     http:
       paths:
       - path: /
@@ -280,8 +280,7 @@ spec:
               number: 80
 EOF
 
-# DNS record
-az network dns record-set a add-record -g PermanentResources --zone-name waddah.net --ipv4-address $appgw_pubip --record-set-name nginx -o none
+
 sleep 10
 # verify
 kubectl get deployment,pod,svc,ingress
@@ -336,7 +335,7 @@ metadata:
     kubernetes.io/ingress.class: azure/application-gateway
 spec:
   rules:
-  - host: "httpd.waddah.net"
+  - host: "httpd.$(appgw_pubip).nip.ip"
     http:
       paths:
       - path: /
@@ -347,7 +346,6 @@ spec:
             port: 
               number: 80
 EOF
-# DNS record
-az network dns record-set a add-record -g PermanentResources --zone-name waddah.net --ipv4-address $appgw_pubip --record-set-name httpd -o none
+
 # verify
 kubectl get deployment,pod,svc,ingress
