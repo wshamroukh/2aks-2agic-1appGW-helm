@@ -1,7 +1,7 @@
 # Two AKS Clusters with one shared Application Gateway and AGIC deployed through Helm Chart on each aks cluster
 
 # Variables
-rg='aks'
+rg='aks-agic'
 location='uaenorth'
 aks_vnet_name='aks'
 aks_vnet_address='10.0.0.0/8'
@@ -18,6 +18,16 @@ aks2_name='aks2'
 echo -e "\e[1;36mCreating Resource Group $rg....\e[0m"
 az group create --location $location -n $rg -o none
 
+# AKS1 Identity
+echo -e "\e[1;36mCreating Managed Identity $aks1_name-identity....\e[0m"
+az identity create -g $rg -n $aks1_name-identity -o none
+aks1_identity_id=$(az identity show -g $rg -n $aks1_name-identity --query id -o tsv)
+
+# aks2 identity
+echo -e "\e[1;36mCreating Managed Identity $aks2_name-identity....\e[0m"
+az identity create -g $rg -n $aks2_name-identity -o none
+aks2_identity_id=$(az identity show -g $rg -n $aks2_name-identity --query id -o tsv)
+
 # vnets
 echo -e "\e[1;36mCreating VNet $aks_vnet_name....\e[0m"
 az network vnet create -g $rg -n $aks_vnet_name --address-prefixes $aks_vnet_address --subnet-name $aks1_system_subnet_name --subnet-prefixes $aks1_system_subnet_address -o none
@@ -28,28 +38,24 @@ az network vnet subnet create -g $rg -n $aks_appgw_subnet_name --address-prefixe
 appgw_name="appgw"
 echo -e "\e[1;36mCreating Application Gateway $appgw_name....\e[0m"
 az network public-ip create -g $rg -n $appgw_name-pubip --allocation-method Static --sku Standard -o none
-az network application-gateway create -n $appgw_name -g $rg --public-ip-address $appgw_name-pubip --sku Standard_v2 --vnet-name $aks_vnet_name --subnet $aks_appgw_subnet_name --no-wait
+az network application-gateway create --priority 10 -n $appgw_name -g $rg --public-ip-address $appgw_name-pubip --sku Standard_v2 --vnet-name $aks_vnet_name --subnet $aks_appgw_subnet_name --no-wait
 
 # log analytics
 echo -e "\e[1;36mCreating Log Analytics Workspace $aks1_name-logAnalytics....\e[0m"
 az monitor log-analytics workspace create -g $rg -n $aks1_name-logAnalytics -o none
 log_analytics_ws_id=$(az monitor log-analytics workspace show -g $rg -n $aks1_name-logAnalytics --query id -o tsv)
 
+sleep 45
+
 # aks1 cluster
-echo -e "\e[1;36mCreating Managed Identity $aks1_name-identity....\e[0m"
-aks_system_subnet_id=$(az network vnet subnet show -g $rg -n $aks1_system_subnet_name --vnet-name $aks_vnet_name --query id -o tsv)
-az identity create -g $rg -n $aks1_name-identity -o none
-aks_identity_id=$(az identity show -g $rg -n $aks1_name-identity --query id -o tsv)
+aks1_system_subnet_id=$(az network vnet subnet show -g $rg -n $aks1_system_subnet_name --vnet-name $aks_vnet_name --query id -o tsv)
 echo -e "\e[1;36mCreating AKS Cluster $aks1_name....\e[0m"
-az aks create -g $rg -n $aks1_name --node-resource-group $rg-$aks1_name-nodes --enable-addons "monitoring" --workspace-resource-id $log_analytics_ws_id --network-plugin azure --enable-rbac --assign-identity $aks_identity_id --node-vm-size Standard_b2ms --vnet-subnet-id $aks_system_subnet_id --service-cidr "10.0.0.0/16" --dns-service-ip "10.0.0.10" --docker-bridge-address "172.17.0.1/16" -o none
+az aks create -g $rg -n $aks1_name --node-count 1 --node-resource-group $rg-$aks1_name-nodes --enable-addons "monitoring" --workspace-resource-id $log_analytics_ws_id --network-plugin azure --assign-identity $aks1_identity_id --node-vm-size Standard_b2ms --vnet-subnet-id $aks1_system_subnet_id --service-cidr "10.0.0.0/16" --dns-service-ip "10.0.0.10" --docker-bridge-address "172.17.0.1/16" -o none
 
 # aks2 cluster
-echo -e "\e[1;36mCreating Managed Identity $aks2_name-identity....\e[0m"
-aks_system_subnet_id=$(az network vnet subnet show -g $rg -n $aks2_system_subnet_name --vnet-name $aks_vnet_name --query id -o tsv)
-az identity create -g $rg -n $aks2_name-identity -o none
-aks_identity_id=$(az identity show -g $rg -n $aks2_name-identity --query id -o tsv)
+aks2_system_subnet_id=$(az network vnet subnet show -g $rg -n $aks2_system_subnet_name --vnet-name $aks_vnet_name --query id -o tsv)
 echo -e "\e[1;36mCreating AKS Cluster $aks2_name....\e[0m"
-az aks create -g $rg -n $aks2_name --node-resource-group $rg-$aks2_name-nodes --enable-addons "monitoring" --workspace-resource-id $log_analytics_ws_id --network-plugin azure --enable-rbac --assign-identity $aks_identity_id --node-vm-size Standard_b2ms --vnet-subnet-id $aks_system_subnet_id --service-cidr "10.0.0.0/16" --dns-service-ip "10.0.0.10" --docker-bridge-address "172.17.0.1/16" -o none
+az aks create -g $rg -n $aks2_name --node-count 1 --node-resource-group $rg-$aks2_name-nodes --enable-addons "monitoring" --workspace-resource-id $log_analytics_ws_id --network-plugin azure --assign-identity $aks2_identity_id --node-vm-size Standard_b2ms --vnet-subnet-id $aks2_system_subnet_id --service-cidr "10.0.0.0/16" --dns-service-ip "10.0.0.10" --docker-bridge-address "172.17.0.1/16" -o none
 
 # Aks1 Pod Identity
 echo -e "\e[1;36mCreating Pod Identity for $aks1_name....\e[0m"
@@ -106,6 +112,10 @@ sed -i "s|shared: false|shared: true|" helm-agic-config.yaml
 sed -i "s|<identityResourceId>|${identityResourceId}|g" helm-agic-config.yaml
 sed -i "/<identityClientId>/ s//$identityClientId/" helm-agic-config.yaml
 sed -i -e "s|enabled: false # true/false|enabled: true # true/false|" helm-agic-config.yaml
+# Installing Helm
+curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+chmod +x get_helm.sh
+./get_helm.sh
 # Adding AGIC helm repo
 helm repo add application-gateway-kubernetes-ingress https://appgwingress.blob.core.windows.net/ingress-azure-helm-package/
 helm repo update
@@ -188,9 +198,9 @@ cat <<EOF | kubectl apply -f -
 apiVersion: "appgw.ingress.k8s.io/v1"
 kind: AzureIngressProhibitedTarget
 metadata:
-  name: httpd-waddah-net
+  name: httpdprohibit
 spec:
-  hostname: httpd.waddah.net
+  hostname: httpd.$appgw_pubip.nip.io
 EOF
 # Confirm crd installation
 kubectl get AzureIngressProhibitedTargets
@@ -203,9 +213,9 @@ cat <<EOF | kubectl apply -f -
 apiVersion: "appgw.ingress.k8s.io/v1"
 kind: AzureIngressProhibitedTarget
 metadata:
-  name: nginx-waddah-net
+  name: nginxprohibit
 spec:
-  hostname: nginx.waddah.net
+  hostname: nginx.$appgw_pubip.nip.io
 EOF
 # Confirm 
 kubectl get AzureIngressProhibitedTargets
@@ -268,7 +278,7 @@ metadata:
     kubernetes.io/ingress.class: azure/application-gateway
 spec:
   rules:
-  - host: "nginx.$(appgw_pubip).nip.ip"
+  - host: "nginx.$appgw_pubip.nip.io"
     http:
       paths:
       - path: /
@@ -335,7 +345,7 @@ metadata:
     kubernetes.io/ingress.class: azure/application-gateway
 spec:
   rules:
-  - host: "httpd.$(appgw_pubip).nip.ip"
+  - host: "httpd.$appgw_pubip.nip.io"
     http:
       paths:
       - path: /
