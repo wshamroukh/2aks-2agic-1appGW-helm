@@ -38,7 +38,7 @@ az network vnet subnet create -g $rg -n $aks_appgw_subnet_name --address-prefixe
 appgw_name="appgw"
 echo -e "\e[1;36mCreating Application Gateway $appgw_name....\e[0m"
 az network public-ip create -g $rg -n $appgw_name-pubip --allocation-method Static --sku Standard -o none
-az network application-gateway create --priority 10 -n $appgw_name -g $rg --public-ip-address $appgw_name-pubip --sku Standard_v2 --vnet-name $aks_vnet_name --subnet $aks_appgw_subnet_name --no-wait
+az network application-gateway create -n $appgw_name -g $rg --priority 10 --public-ip-address $appgw_name-pubip --sku Standard_v2 --vnet-name $aks_vnet_name --subnet $aks_appgw_subnet_name --no-wait
 
 # log analytics
 echo -e "\e[1;36mCreating Log Analytics Workspace $aks1_name-logAnalytics....\e[0m"
