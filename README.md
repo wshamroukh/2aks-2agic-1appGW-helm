@@ -1,4 +1,4 @@
-# 2aks-1agic-helm
+# 2aks-2agic-shared-appgw-helm
 Two Azure Kubernetes Services (AKS) clusters with a shared single Application Gateway and AGIC deployed to each AKS cluster via Helm
 
 ![2aks-1appgw.png](/2aks-1appgw.png)
