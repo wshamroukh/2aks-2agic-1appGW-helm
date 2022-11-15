@@ -1,7 +1,7 @@
 # Two AKS Clusters with one shared Application Gateway and AGIC deployed through Helm Chart on each aks cluster
 
 # Variables
-rg='2aks-2agic-1appgw'
+rg='2aks-2agic-shared-1appgw'
 location='uaenorth'
 aks_vnet_name='aks'
 aks_vnet_address='10.0.0.0/8'
@@ -213,9 +213,9 @@ cat <<EOF | kubectl apply -f -
 apiVersion: "appgw.ingress.k8s.io/v1"
 kind: AzureIngressProhibitedTarget
 metadata:
-  name: httpdprohibit
+  name: aks2prohibit
 spec:
-  hostname: httpd.$appgw_pubip.nip.io
+  hostname: aks2.$appgw_pubip.nip.io
 EOF
 # Confirm crd installation
 kubectl get AzureIngressProhibitedTargets
@@ -229,9 +229,9 @@ cat <<EOF | kubectl apply -f -
 apiVersion: "appgw.ingress.k8s.io/v1"
 kind: AzureIngressProhibitedTarget
 metadata:
-  name: nginxprohibit
+  name: aks1prohibit
 spec:
-  hostname: nginx.$appgw_pubip.nip.io
+  hostname: aks1.$appgw_pubip.nip.io
 EOF
 # Confirm 
 kubectl get AzureIngressProhibitedTargets
@@ -248,36 +248,28 @@ echo -e "\e[1;36mDeploying a service on $aks1_name with ingress....\e[0m"
 az aks get-credentials -g $rg -n $aks1_name
 
 cat <<EOF | kubectl apply -f -
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: v1
+kind: Pod
 metadata:
-  name: nginx-deployment
+  name: aks1
   labels:
-    app: nginx
+    app: aks1
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: nginx
-  template:
-    metadata:
-      labels:
-        app: nginx
-    spec:
-      containers:
-      - name: nginx
-        image: nginx
-        ports:
-        - containerPort: 80
+  containers:
+  - image: "mcr.microsoft.com/dotnet/samples:aspnetapp"
+    name: aspnetapp-image
+    ports:
+    - containerPort: 80
+      protocol: TCP
 ---
 
 apiVersion: v1
 kind: Service
 metadata:
-  name: nginx-svc
+  name: aks1-svc
 spec:
   selector:
-    app: nginx
+    app: aks1
   ports:
   - protocol: TCP
     port: 80
@@ -288,19 +280,19 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: nginx-ing
+  name: aks1-ingress
   annotations:
     kubernetes.io/ingress.class: azure/application-gateway
 spec:
   rules:
-  - host: "nginx.$appgw_pubip.nip.io"
+  - host: "aks1.$appgw_pubip.nip.io"
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: nginx-svc
+            name: aks1-svc
             port: 
               number: 80
 EOF
@@ -309,6 +301,8 @@ EOF
 sleep 10
 # verify
 kubectl get deployment,pod,svc,ingress
+
+
 #############################
 # App 2  deployed to aks2 #
 #############################
@@ -316,36 +310,28 @@ echo -e "\e[1;36mDeploying a service on $aks2_name with ingress....\e[0m"
 az aks get-credentials -g $rg -n $aks2_name
 
 cat <<EOF | kubectl apply -f -
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: v1
+kind: Pod
 metadata:
-  name: httpd-deployment
+  name: aks2
   labels:
-    app: httpd
+    app: aks2
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: httpd
-  template:
-    metadata:
-      labels:
-        app: httpd
-    spec:
-      containers:
-      - name: httpd
-        image: httpd
-        ports:
-        - containerPort: 80
+  containers:
+  - image: "mcr.microsoft.com/dotnet/samples:aspnetapp"
+    name: aspnetapp-image
+    ports:
+    - containerPort: 80
+      protocol: TCP
 ---
 
 apiVersion: v1
 kind: Service
 metadata:
-  name: httpd-svc
+  name: aks2-svc
 spec:
   selector:
-    app: httpd
+    app: aks2
   ports:
   - protocol: TCP
     port: 80
@@ -356,19 +342,19 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: httpd-ing
+  name: aks2-ingress
   annotations:
     kubernetes.io/ingress.class: azure/application-gateway
 spec:
   rules:
-  - host: "httpd.$appgw_pubip.nip.io"
+  - host: "aks2.$appgw_pubip.nip.io"
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: httpd-svc
+            name: aks2-svc
             port: 
               number: 80
 EOF
